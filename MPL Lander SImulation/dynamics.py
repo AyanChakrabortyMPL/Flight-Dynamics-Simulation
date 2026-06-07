@@ -15,7 +15,7 @@ def ThrustCurve(t, duration, thrust):
 
 def SixDOFDynamics(t_s, StateVector, vehicle):
 
-    dx = np.zeros((12))
+    StateVectordot = np.zeros((12))
 
     #Unpack State Vector
     u_mps = StateVector[0]
@@ -30,9 +30,9 @@ def SixDOFDynamics(t_s, StateVector, vehicle):
     theta_rad = StateVector[7]
     psi_rad = StateVector[8]
 
-    Xword_m = StateVector[9]
-    Yword_m = StateVector[10]
-    Zword_m = StateVector[11]
+    Xworld_m = StateVector[9]
+    Yworld_m = StateVector[10]
+    Zworld_m = StateVector[11]
     
     #Unpack Vehicle Definitions
 
@@ -43,187 +43,127 @@ def SixDOFDynamics(t_s, StateVector, vehicle):
     Jyy_kgm2 = vehicle['Jyy_kgm2']
     Jzz_kgm2 = vehicle['Jzz_kgm2']
 
-    #Gravity data 
-    gravityZaxis_ms2 = 9.80665
+    #----Calculate Dynamics----#
 
-    #Gravity in body axis (Rotation Matrix)
-
-    gravitybodyX_mps2 = -math.sin(theta_rad)*gravityZaxis_ms2
-    gravitybodyY_mps2 = math.sin(phi_rad)*math.cos(theta_rad)*gravityZaxis_ms2
-    gravitybodyZ_mps2 = math.cos(phi_rad)*math.cos(theta_rad)*gravityZaxis_ms2
-
-    #External Forces
-
-    Fx_b_N = 0
-    Fy_b_N = ThrustCurve(t_s, 6, 15000)
-    Fz_b_N = -ThrustCurve(t_s, 15, 150000)
-
-    #External Moments
-
-    L_b_kgm2ps2 = ThrustCurve(t_s, 2, 100)
-    M_b_kgm2ps2 = 0
-    N_b_kgm2ps2 = 0
-
-
-    #Translational Equations
-
-    #x axis velocity 
-    dx[0] = (1/m_kg * Fx_b_N) + gravitybodyX_mps2 - (w_mps * q_rps) + (v_mps*r_rps)
-
-    #y-axis velocity
-    dx[1] = (1/m_kg * Fy_b_N) + gravitybodyY_mps2 - (u_mps * r_rps) + (w_mps * p_rps)
-
-    #z-axis velocity
-    dx[2] = (1/m_kg * Fz_b_N) + gravitybodyZ_mps2 - (v_mps * p_rps) + (u_mps * q_rps)
-
-    #Rotational Equation
-
-    #Denominator 
-    denominator = ((Jxx_kgm2 * Jzz_kgm2) - Jxz_kgm2**2) 
-
-    #Roll Equation (p)
-    dx[3] = ((Jxz_kgm2*(Jxx_kgm2-Jyy_kgm2+Jzz_kgm2)*p_rps*q_rps) - ((Jzz_kgm2*(Jzz_kgm2-Jyy_kgm2)+(Jxz_kgm2**2))*q_rps*r_rps) + (Jzz_kgm2*L_b_kgm2ps2) + (Jxz_kgm2*N_b_kgm2ps2))/denominator
-
-    #Pitch Equation (q)
-    dx[4] = (((Jzz_kgm2-Jxx_kgm2)*p_rps*r_rps) - (Jxz_kgm2*(p_rps**2 - r_rps**2)) + M_b_kgm2ps2)/Jyy_kgm2
-
-    #Yaw Equation (r)
-    dx[5] = (((Jxx_kgm2*(Jxx_kgm2-Jyy_kgm2)+(Jxz_kgm2**2))*p_rps*q_rps) + (Jxz_kgm2*(Jxx_kgm2-Jyy_kgm2+Jzz_kgm2)*q_rps*r_rps) + (Jxz_kgm2*L_b_kgm2ps2) + (Jxx_kgm2*N_b_kgm2ps2))/denominator
-
-    #Kinematic Equation 
-    dx[6] = p_rps+math.sin(phi_rad)*math.tan(theta_rad)*q_rps+math.cos(phi_rad)*math.tan(theta_rad)*r_rps
-    dx[7] = math.cos(phi_rad)*q_rps-math.sin(phi_rad)*r_rps
-    dx[8] = math.sin(phi_rad)/math.cos(theta_rad)*q_rps+math.cos(phi_rad)/math.cos(theta_rad)*r_rps
-
-    cos_phi = math.cos(phi_rad)
+    #Trig Functions
     sin_phi = math.sin(phi_rad)
-    cos_theta = math.cos(theta_rad)
+    cos_phi = math.cos(phi_rad)
     sin_theta = math.sin(theta_rad)
-    cos_psi = math.cos(psi_rad)
+    cos_theta = math.cos(theta_rad)
     sin_psi = math.sin(psi_rad)
+    cos_psi = math.cos(psi_rad)
 
 
-    #Position 
-    dx[9] = (cos_theta*cos_psi*u_mps)+((-cos_phi*sin_psi)+(sin_phi*sin_theta*cos_psi))*v_mps+((sin_phi*sin_psi)+(cos_phi*sin_theta*cos_psi))*w_mps
-    dx[10] = (cos_theta*sin_psi*u_mps)+((cos_phi*cos_psi)+(sin_phi*sin_theta*sin_psi))*v_mps+((-sin_phi*cos_psi)+(cos_phi*sin_theta*sin_psi))*w_mps
-    dx[11] = (-sin_theta*u_mps)+(sin_phi*cos_theta*v_mps)+(cos_phi*cos_theta*w_mps)
+    #Translational Dynamics
 
-    return dx
+    #Thrust and Aerodynamic Forces in Body Frame
+    Fxbody_N = 0 
+    Fybody_N = 0
+    Fzbody_N = 0
 
-def Animate3D(xpos, ypos, zpos, speed=50, fps=120, trail_length=1000):
+    ForceVector = np.array([[Fxbody_N],
+                            [Fybody_N],
+                            [Fzbody_N]])
+    
+    GravityRotationMatrix = np.array([[-sin_theta],
+                                      [sin_phi*cos_theta],
+                                      [cos_phi*cos_theta]])
+    
+    CoriolisVector = np.array([[(r_rps*v_mps)-(q_rps*w_mps)],
+                               [(p_rps*w_mps)-(r_rps*u_mps)],
+                               [(q_rps*u_mps)-(p_rps*v_mps)]])
 
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from matplotlib.animation import FuncAnimation
+    TranslationalAccelerations = (1/m_kg)*ForceVector + 9.81*GravityRotationMatrix + CoriolisVector
 
-    # Remove bad values (VERY important for your crash issue)
-    valid = np.isfinite(xpos) & np.isfinite(ypos) & np.isfinite(zpos)
-    xpos, ypos, zpos = xpos[valid], ypos[valid], zpos[valid]
+    udot_mps2 = TranslationalAccelerations[0,0] #0
+    vdot_mps2 = TranslationalAccelerations[1,0] #1
+    wdot_mps2 = TranslationalAccelerations[2,0] #2
 
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111, projection='3d')
+    #Rotational Dynamics
 
-    # ---- FIXED CAMERA (stable view, no “dot in center” bug)
-    max_range = max(
-        xpos.max() - xpos.min(),
-        ypos.max() - ypos.min(),
-        zpos.max() - zpos.min()
-    ) / 2
+    # Moments in Body Frame
+    Mxbody_Nm = 0
+    Mybody_Nm = 0
+    Mzbody_Nm = 0
 
-    mid_x = (xpos.max() + xpos.min()) / 2
-    mid_y = (ypos.max() + ypos.min()) / 2
-    mid_z = (zpos.max() + zpos.min()) / 2
+    IntertiaTensor = np.array([[Jxx_kgm2, 0, -Jxz_kgm2], 
+                               [0, Jyy_kgm2, 0], 
+                               [-Jzx_kgm2, 0, Jzz_kgm2]]) #<---Ts is fried
+    
+    InverseInertiaTensor = np.linalg.inv(IntertiaTensor)
 
-    ax.set_xlim(mid_x - max_range, mid_x + max_range)
-    ax.set_ylim(mid_y - max_range, mid_y + max_range)
-    ax.set_zlim(mid_z - max_range, mid_z + max_range)
+    MomentVector = np.array([[Mxbody_Nm+((Jyy_kgm2-Jzz_kgm2)*q_rps*r_rps)+(Jxz_kgm2*p_rps*q_rps)],
+                             [Mybody_Nm+((Jzz_kgm2-Jxx_kgm2)*p_rps*r_rps)+(Jxz_kgm2*((r_rps**2)-(p_rps**2)))],
+                             [Mzbody_Nm+((Jxx_kgm2-Jyy_kgm2)*p_rps*q_rps)-(Jxz_kgm2*q_rps*r_rps)]])
+    
+    RotationalAccelerations = InverseInertiaTensor @ MomentVector
 
-    ax.set_xlabel("X (m)")
-    ax.set_ylabel("Y (m)")
-    ax.set_zlabel("Z (m)")
-    ax.set_title("3D Flight Animation")
+    pdot_rps2 = RotationalAccelerations[0,0] #3
+    qdot_rps2 = RotationalAccelerations[1,0] #4
+    rdot_rps2 = RotationalAccelerations[2,0] #5
 
-    # Objects
-    trail, = ax.plot([], [], [], lw=2)
-    point, = ax.plot([], [], [], 'ro', markersize=6)
+    #Kinematic Transformation Equationse
 
-    # ---- FRAME CONTROL (speed works properly here)
-    def update(frame):
+    """
+    (Note from Ayan)
+    The kinematic transformation equations are essienalyl just body rates or measurements transformed into  
+    world frame. The translational kinematics transform body frame velocities into world frame velocities, and the rotational kinematics transform body frame angular rates into world frame angular rates.
 
-        i = frame * speed
+    So here the TranslationalKinematicsMatrix transforms the body frame velocities (u, v, w) into world frame velocities (xdot, ydot, zdot) that one would observe from the ground (pretty sure)
+    The world frame is the earth fixed coordinate system where 
+    x points north
+    y points east
+    z points down
 
-        if i >= len(xpos):
-            i = len(xpos) - 1
+    The RotationalKinematicsMatrix transforms the body frame angular rates (p, q, r) into world frame angular rates (phidot, thetadot, psidot) that one would observe from the ground (pretty sure)
+    it gets kinda tricky here because idrk how the order of what we are rotating first second third is but ill get to it later and update this comment    
+    """
 
-        start = max(0, i - trail_length)
+    #Translational Kinematics
 
-        # trail
-        trail.set_data(xpos[start:i], ypos[start:i])
-        trail.set_3d_properties(zpos[start:i])
+    TranslationalKinematicsMatrix = np.array([[(cos_theta*cos_psi),((sin_phi*sin_theta*cos_psi)-(cos_phi*sin_psi)),((cos_phi*sin_theta*cos_psi)+(sin_psi*sin_phi))],
+                                           [(cos_theta*sin_psi),((sin_phi*sin_theta*sin_psi)+(cos_phi*cos_psi)),((cos_phi*sin_theta*sin_psi)-(sin_psi*cos_phi))],
+                                           [(-sin_theta),(sin_phi*cos_theta),(cos_phi*cos_theta)]]) #transforms body rates to world rates
+    
+    BodyTranslationalRatesVector = np.array([[u_mps],
+                                             [v_mps],
+                                             [w_mps]])
+    
+    WorldTranslationalVelocities = TranslationalKinematicsMatrix @ BodyTranslationalRatesVector 
 
-        # vehicle
-        point.set_data([xpos[i]], [ypos[i]])
-        point.set_3d_properties([zpos[i]])
+    xdot_m = WorldTranslationalVelocities[0,0] #6
+    ydot_m = WorldTranslationalVelocities[1,0] #7
+    zdot_m = WorldTranslationalVelocities[2,0] #8
 
-        return trail, point
+    #Rotational Kinematics
 
-    ani = FuncAnimation(
-        fig,
-        update,
-        frames=len(xpos) // speed,
-        interval=1000 / fps,
-        blit=False,
-        cache_frame_data=False
-    )
+    RotationalKinematicsMatrix = np.array([[(1), ((sin_phi*sin_theta)/cos_theta), ((cos_phi*sin_theta)/cos_theta)],
+                                           [(0), (cos_psi), (-sin_psi)],
+                                           [(0), (sin_psi/cos_theta), (cos_psi/cos_theta)]]) #transforms body rates to world rates
+    
+    BodyRotationalRatesVector = np.array([[p_rps],
+                                           [q_rps],
+                                           [r_rps]])
+    
+    EulerAngleRates = RotationalKinematicsMatrix @ BodyRotationalRatesVector #Same as world frame angular rates
+    
+    phidot_rps = EulerAngleRates[0,0] #9
+    thetadot_rps = EulerAngleRates[1,0] #10
+    psidot_rps = EulerAngleRates[2,0] #11
 
-    plt.show()
+    #Construct StateVectordot
 
-def Animate2D(xpos, zpos, speed=50, fps=60, trail_length=50000):
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from matplotlib.animation import FuncAnimation
-
-    # Strip NaN / inf
-    valid = np.isfinite(xpos) & np.isfinite(zpos)
-    xpos, zpos = xpos[valid], zpos[valid]
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.set_xlabel("Downrange (m)")
-    ax.set_ylabel("Altitude (m)")
-    ax.set_title("2D Flight Path")
-    ax.set_aspect("equal")
-    ax.grid(True, alpha=0.3)
-
-    # Fixed axes — sized to the full trajectory
-    pad_x = (xpos.max() - xpos.min()) * 0.05 + 1
-    pad_z = (zpos.max() - zpos.min()) * 0.05 + 1
-    ax.set_xlim(xpos.min() - pad_x, xpos.max() + pad_x)
-    ax.set_ylim(min(0, zpos.min() - pad_z), zpos.max() + pad_z)
-
-    # Ground line
-    ax.axhline(0, color="saddlebrown", linewidth=1.5, alpha=0.6)
-
-    trail,  = ax.plot([], [], lw=1.5, color="steelblue", alpha=0.6)
-    point,  = ax.plot([], [], "ro", markersize=7)
-    text    = ax.text(0.02, 0.96, "", transform=ax.transAxes,
-                      va="top", fontsize=9, color="gray")
-
-    def update(frame):
-        i     = min(frame * speed, len(xpos) - 1)
-        start = max(0, i - trail_length)
-
-        trail.set_data(xpos[start:i], zpos[start:i])
-        point.set_data([xpos[i]], [zpos[i]])
-        text.set_text(f"x={xpos[i]:.0f} m   alt={zpos[i]:.0f} m")
-        return trail, point, text
-
-    ani = FuncAnimation(
-        fig, update,
-        frames=len(xpos) // speed,
-        interval=1000 / fps,
-        blit=False,
-        cache_frame_data=False
-    )
-
-    plt.tight_layout()
-    plt.show()
+    StateVectordot[0] = udot_mps2
+    StateVectordot[1] = vdot_mps2
+    StateVectordot[2] = wdot_mps2
+    StateVectordot[3] = pdot_rps2
+    StateVectordot[4] = qdot_rps2
+    StateVectordot[5] = rdot_rps2
+    StateVectordot[6] = phidot_rps
+    StateVectordot[7] = thetadot_rps
+    StateVectordot[8] = psidot_rps
+    StateVectordot[9] = xdot_m
+    StateVectordot[10] = ydot_m
+    StateVectordot[11] = zdot_m
+    
+    return StateVectordot
