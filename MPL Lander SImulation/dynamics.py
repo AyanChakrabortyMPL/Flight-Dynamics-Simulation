@@ -178,3 +178,10 @@ def SixDOFDynamics(t_s, StateVector, vehicle):
     StateVectordot[11] = zdot_m
     
     return StateVectordot
+
+
+def ActuatorDynamics():
+
+    "Fill out later for now output a max angle"
+
+    return np.deg2rad(10)

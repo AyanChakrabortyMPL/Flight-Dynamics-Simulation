@@ -1,6 +1,5 @@
 import dynamics 
 import animationfunc as plot
-
 import math
 import numpy as np
 
@@ -108,7 +107,7 @@ def run():
 
     #Animate2D(t_s, StateHistory)
     #PlotVerticalVelocity(t_s, StateHistory)
-    #plot.PlotFlightPath(t_s, StateHistory)
-    plot.PlotAllStates(t_s, StateHistory)
+    plot.PlotFlightPath(t_s, StateHistory)
+    #plot.PlotAllStates(t_s, StateHistory)
 
 run()
